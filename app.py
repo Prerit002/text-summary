@@ -17,9 +17,10 @@ st.write("Upload a PDF document. The system extracts text and generates a concis
 # ---------------------------------
 @st.cache_resource
 def load_model():
-    tokenizer = T5Tokenizer.from_pretrained("./t5_finetuned_model")
-    model = T5ForConditionalGeneration.from_pretrained("./t5_finetuned_model")
+    tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-small")
+    model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-small")
     model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+    model.eval()
     return tokenizer, model
 
 tokenizer, model = load_model()
