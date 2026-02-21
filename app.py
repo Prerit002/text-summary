@@ -22,8 +22,13 @@ def load_ocr():
 
 @st.cache_resource
 def load_model():
+    import gdown
+    import os
+    if not os.path.exists("t5_finetuned_model"):
+        gdown.download_folder("YOUR_DRIVE_FOLDER_LINK")
+    
     tokenizer = T5Tokenizer.from_pretrained("./t5_finetuned_model")
-    model = T5ForConditionalGeneration.from_pretrained("./t5_finetuned_model")
+    model = T5ForConditionalGeneration.from_pretrained("Prerit002/text-summary-model")
     model = model.to("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     return tokenizer, model
