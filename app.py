@@ -70,7 +70,7 @@ def extract_text_from_pdf(file_bytes):
 # Long Text Summarization
 # ============================================
 
-def summarize_long_text(text, summary_ratio=0.25, chunk_size=1500):
+def summarize_long_text(text, summary_ratio=0.15, chunk_size=1500):
 
     words = text.split()
     chunks = []
@@ -147,7 +147,7 @@ if uploaded_file:
         "📏 Summary Length Ratio",
         min_value=0.1,
         max_value=0.5,
-        value=0.25,
+        value=0.15,
         step=0.05,
         help="Lower = shorter summary, Higher = more detailed summary"
     )
