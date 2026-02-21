@@ -1,9 +1,9 @@
-streamlit==1.32.0
-torch==2.5.1
-transformers==4.36.2
-easyocr==1.7.2
-sentencepiece==0.2.1
+streamlit
+torch>=2.6
+torchvision
+transformers
+easyocr
+sentencepiece
 numpy<2
 pymupdf
 Pillow
-torchvision==0.20.1
