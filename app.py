@@ -70,7 +70,7 @@ def extract_text_from_pdf(file_bytes):
 # Long Text Summarization
 # ============================================
 
-def summarize_long_text(text, summary_ratio=0.25, chunk_size=800):
+def summarize_long_text(text, summary_ratio=0.25, chunk_size=1500):
 
     words = text.split()
     chunks = []
@@ -92,19 +92,17 @@ def summarize_long_text(text, summary_ratio=0.25, chunk_size=800):
             truncation=True
         )
 
-        input_word_count = len(chunk.split())
+        chunk_word_count = len(chunk.split())
 
-        max_len = int(input_word_count * summary_ratio)
-        max_len = max(60, min(max_len, 250))
-        min_len = int(max_len * 0.5)
+        max_len = int(chunk_word_count * summary_ratio)
+        max_len = max(80, min(max_len, 220))
+        min_len = int(max_len * 0.6)
 
         summary_ids = model.generate(
             inputs["input_ids"],
             max_length=max_len,
             min_length=min_len,
-            num_beams=6,
-            length_penalty=1.2,
-            no_repeat_ngram_size=3,
+            num_beams=3,
             early_stopping=True
         )
 
@@ -113,8 +111,27 @@ def summarize_long_text(text, summary_ratio=0.25, chunk_size=800):
 
     combined_summary = " ".join(summaries)
 
-    return combined_summary
+    input_text = "summarize: " + combined_summary
 
+    inputs = tokenizer(
+        input_text,
+        return_tensors="pt",
+        max_length=512,
+        truncation=True
+    )
+    final_max = min(300, int(len(words) * summary_ratio))
+    final_min = int(final_max * 0.6)
+
+    final_ids = model.generate(
+        inputs["input_ids"],
+        max_length = final_max,
+        min_length = final_min,
+        num_beams=3,
+        early_stopping = True
+    )
+
+    return tokenizer.decode(final_ids[0], skip_special_tokens=True)
+    
 # ============================================
 # File Upload UI
 # ============================================
