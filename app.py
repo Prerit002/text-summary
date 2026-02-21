@@ -61,25 +61,48 @@ def summarize_text(text):
 # ---------------------------------
 # Upload Section
 # ---------------------------------
-uploaded_file = st.file_uploader("📤 Upload PDF", type=["pdf"])
-
+uploaded_file = st.file_uploader(
+    "Upload an Image or PDF",
+    type=["png", "jpg", "jpeg", "pdf"]
+)
 if uploaded_file:
 
-    if st.button("Generate Summary"):
+    file_type = uploaded_file.type
 
-        start_time = time.time()
-
+    # -------------------------
+    # PDF Handling
+    # -------------------------
+    if file_type == "application/pdf":
         with st.spinner("Extracting text from PDF..."):
             extracted_text = extract_text_from_pdf(uploaded_file)
 
-        st.subheader("📄 Extracted Text Preview")
-        st.write(extracted_text[:1000] + "...")
+        st.subheader("Extracted Text (PDF)")
+        st.write(extracted_text)
 
-        with st.spinner("Generating summary..."):
+    # -------------------------
+    # Image Handling (PNG/JPG/JPEG)
+    # -------------------------
+    else:
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Uploaded Image", use_column_width=True)
+
+        with st.spinner("Extracting text from image..."):
+            extracted_text = extract_text(image)
+
+        st.subheader("Extracted Text (Image)")
+        st.write(extracted_text)
+
+    # -------------------------
+    # Summarization
+    # -------------------------
+    if extracted_text.strip():
+        with st.spinner("Generating Summary..."):
             summary = summarize_text(extracted_text)
 
-        st.subheader("📝 Generated Summary")
+        st.subheader("Generated Summary")
         st.success(summary)
+    else:
+        st.error("No text detected.")
 
         end_time = time.time()
         st.info(f"⏱ Processing Time: {round(end_time - start_time, 2)} seconds")
