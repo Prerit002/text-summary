@@ -3,7 +3,8 @@ torch==2.5.1
 transformers==4.36.2
 easyocr==1.7.2
 sentencepiece==0.2.1
-numpy
+numpy<2
 pymupdf
 Pillow
+
 
