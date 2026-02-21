@@ -1,150 +1,183 @@
 import streamlit as st
 import torch
-import fitz
+import fitz # PyMuPDF
 import easyocr
-import numpy as np
-from PIL import Image
 from transformers import T5Tokenizer, T5ForConditionalGeneration
+from pdf2image import convert_from_bytes
+from PIL import Image
+import numpy as np
 import time
 
-# ---------------------------------
-# Page Configuration
-# ---------------------------------
-st.set_page_config(page_title="PDF Summarization System", layout="wide")
+# ============================================
+# Configuration
+# ============================================
 
-st.title("📄 PDF Abstractive Text Summarization")
-st.write("Upload a PDF document. The system extracts text and generates a concise summary using a fine-tuned Transformer model.")
-
-# ---------------------------------
-# Load Model (Cached)
-# ---------------------------------
 MODEL_NAME = "Aryan-8878/text-summary"
+
+st.set_page_config(
+    page_title="Smart OCR Summarization",
+    layout="wide"
+)
+
+st.title("📄 Smart OCR-Based Abstractive Text Summarization")
+st.write("Upload an Image or PDF. The system extracts text and generates a proportional summary.")
+
+# ============================================
+# Load Models (CPU for Streamlit Cloud)
+# ============================================
+
+@st.cache_resource
+def load_ocr():
+    return easyocr.Reader(['en'], gpu=False)
+
 @st.cache_resource
 def load_model():
     tokenizer = T5Tokenizer.from_pretrained(MODEL_NAME)
     model = T5ForConditionalGeneration.from_pretrained(MODEL_NAME)
-    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
-    model.eval()
+    model = model.to("cpu")
     return tokenizer, model
 
-tokenizer, model = load_model()
-# ---------------------------------
-# Load OCR (Cached)
-# ---------------------------------
-@st.cache_resource
-def load_ocr():
-    return easyocr.Reader(
-        ['en'],
-        gpu=torch.cuda.is_available()
-    )
-
 reader = load_ocr()
+tokenizer, model = load_model()
 
-# ---------------------------------
-# Image OCR Function
-# ---------------------------------
-def extract_text(image):
+# ============================================
+# OCR Functions
+# ============================================
+
+def extract_text_from_image(image):
     result = reader.readtext(np.array(image), detail=0)
     return " ".join(result)
-# ---------------------------------
-# PDF Text Extraction
-# ---------------------------------
-def extract_text_from_pdf(uploaded_file):
+
+def extract_text_from_pdf(file_bytes):
     text = ""
 
-    pdf_bytes = uploaded_file.read()
-
-    # 1️⃣ Try extracting embedded text first
-    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+    # Try direct text extraction
+    with fitz.open(stream=file_bytes, filetype="pdf") as doc:
         for page in doc:
             text += page.get_text()
 
-    text = text.strip()
+    if len(text.strip()) > 50:
+        return text.strip(), "Direct PDF Text Extraction"
 
-    # 2️⃣ If no embedded text → fallback to OCR
-    if not text:
-        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-            for page in doc:
-                pix = page.get_pixmap()
-                img = Image.frombytes(
-                    "RGB",
-                    [pix.width, pix.height],
-                    pix.samples
-                )
-                ocr_result = reader.readtext(np.array(img), detail=0)
-                text += " ".join(ocr_result)
+    # Fallback to OCR
+    images = convert_from_bytes(file_bytes)
+    for img in images:
+        text += extract_text_from_image(img)
 
-    return text.strip()
+    return text.strip(), "PDF Converted to Images + OCR"
 
-# ---------------------------------
-# Summarization Function
-# ---------------------------------
-def summarize_text(text):
-    input_text = "summarize: " + text[:4000] # limit size for safety
+# ============================================
+# Long Text Summarization
+# ============================================
 
-    inputs = tokenizer(
-        input_text,
-        return_tensors="pt",
-        max_length=512,
-        truncation=True
-    ).to(model.device)
+def summarize_long_text(text, summary_ratio=0.25, chunk_size=800):
 
-    summary_ids = model.generate(
-        inputs["input_ids"],
-        max_length=150,
-        min_length=50,
-        num_beams=4,
-        early_stopping=True
+    words = text.split()
+    chunks = []
+
+    for i in range(0, len(words), chunk_size):
+        chunk = " ".join(words[i:i + chunk_size])
+        chunks.append(chunk)
+
+    summaries = []
+
+    for chunk in chunks:
+
+        input_text = "summarize: " + chunk
+
+        inputs = tokenizer(
+            input_text,
+            return_tensors="pt",
+            max_length=512,
+            truncation=True
+        )
+
+        input_word_count = len(chunk.split())
+
+        max_len = int(input_word_count * summary_ratio)
+        max_len = max(60, min(max_len, 250))
+        min_len = int(max_len * 0.5)
+
+        summary_ids = model.generate(
+            inputs["input_ids"],
+            max_length=max_len,
+            min_length=min_len,
+            num_beams=6,
+            length_penalty=1.2,
+            no_repeat_ngram_size=3,
+            early_stopping=True
+        )
+
+        summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+        summaries.append(summary)
+
+    combined_summary = " ".join(summaries)
+
+    return combined_summary
+
+# ============================================
+# File Upload UI
+# ============================================
+
+uploaded_file = st.file_uploader(
+    "Upload Image or PDF",
+    type=["jpg", "jpeg", "png", "pdf"]
+)
+
+if uploaded_file:
+
+    summary_ratio = st.slider(
+        "📏 Summary Length Ratio",
+        min_value=0.1,
+        max_value=0.5,
+        value=0.25,
+        step=0.05,
+        help="Lower = shorter summary, Higher = more detailed summary"
     )
 
-    return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-
-# ---------------------------------
-# Upload Section
-# ---------------------------------
-uploaded_file = st.file_uploader(
-    "Upload an Image or PDF",
-    type=["png", "jpg", "jpeg", "pdf"]
-)
-if uploaded_file:
     start_time = time.time()
 
-    file_type = uploaded_file.type
+    file_bytes = uploaded_file.read()
 
-    # -------------------------
-    # PDF Handling
-    # -------------------------
-    if file_type == "application/pdf":
-        with st.spinner("Extracting text from PDF..."):
-            extracted_text = extract_text_from_pdf(uploaded_file)
+    if uploaded_file.type == "application/pdf":
 
-        st.subheader("Extracted Text (PDF)")
-        st.write(extracted_text)
+        with st.spinner("Processing PDF..."):
+            extracted_text, method = extract_text_from_pdf(file_bytes)
 
-    # -------------------------
-    # Image Handling (PNG/JPG/JPEG)
-    # -------------------------
+        st.subheader(f"📄 Extraction Method: {method}")
+        st.write(extracted_text[:1000] + "...")
+
     else:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", use_column_width=True)
 
         with st.spinner("Extracting text from image..."):
-            extracted_text = extract_text(image)
+            extracted_text = extract_text_from_image(image)
 
-        st.subheader("Extracted Text (Image)")
-        st.write(extracted_text)
+        st.subheader("📄 Extracted Text")
+        st.write(extracted_text[:1000] + "...")
 
-    # -------------------------
-    # Summarization
-    # -------------------------
-    if extracted_text.strip():
-        with st.spinner("Generating Summary..."):
-            summary = summarize_text(extracted_text)
-
-        st.subheader("Generated Summary")
-        st.success(summary)
-    else:
+    if extracted_text.strip() == "":
         st.error("No text detected.")
+    else:
+        with st.spinner("Generating summary..."):
+            summary = summarize_long_text(extracted_text, summary_ratio=summary_ratio)
 
-        end_time = time.time()
-        st.info(f"⏱ Processing Time: {round(end_time - start_time, 2)} seconds")
+        st.subheader("📝 Generated Summary")
+        st.success(summary)
+
+        # Metrics
+        summary_word_count = len(summary.split())
+        original_word_count = len(extracted_text.split())
+
+        compression_ratio = summary_word_count / original_word_count
+
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric("Original Words", original_word_count)
+        col2.metric("Summary Words", summary_word_count)
+        col3.metric("Compression", f"{compression_ratio*100:.2f}%")
+
+    end_time = time.time()
+    st.info(f"⏱ Processing Time: {round(end_time - start_time, 2)} seconds")
