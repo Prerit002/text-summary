@@ -194,7 +194,7 @@ if uploaded_file:
 
         col1.metric("Original Words", original_word_count)
         col2.metric("Summary Words", summary_word_count)
-        col3.metric("Compression", f"{compression_ratio*100:.2f}%")
+        col3.metric("Compression", f"{((original_word_count)-(summary_word_count)/(original_word_count))*100}%")
 
     end_time = time.time()
     st.info(f"⏱ Processing Time: {round(end_time - start_time, 2)} seconds")
