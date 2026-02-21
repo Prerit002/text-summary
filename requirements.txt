@@ -6,5 +6,4 @@ sentencepiece==0.2.1
 numpy<2
 pymupdf
 Pillow
-
-
+torchvision==0.20.1
