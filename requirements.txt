@@ -6,4 +6,4 @@ easyocr
 sentencepiece
 numpy<2
 pymupdf
-Pillow
+Pillow
