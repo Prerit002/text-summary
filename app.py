@@ -1,6 +1,9 @@
 import streamlit as st
 import torch
-import fitz # PyMuPDF
+import fitz
+import easyocr
+import numpy as np
+from PIL import Image
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 import time
 
@@ -24,7 +27,24 @@ def load_model():
     return tokenizer, model
 
 tokenizer, model = load_model()
+# ---------------------------------
+# Load OCR (Cached)
+# ---------------------------------
+@st.cache_resource
+def load_ocr():
+    return easyocr.Reader(
+        ['en'],
+        gpu=torch.cuda.is_available()
+    )
 
+reader = load_ocr()
+
+# ---------------------------------
+# Image OCR Function
+# ---------------------------------
+def extract_text(image):
+    result = reader.readtext(np.array(image), detail=0)
+    return " ".join(result)
 # ---------------------------------
 # PDF Text Extraction
 # ---------------------------------
@@ -66,6 +86,7 @@ uploaded_file = st.file_uploader(
     type=["png", "jpg", "jpeg", "pdf"]
 )
 if uploaded_file:
+    start_time = time.time()
 
     file_type = uploaded_file.type
 
