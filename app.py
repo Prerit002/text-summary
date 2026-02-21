@@ -50,9 +50,29 @@ def extract_text(image):
 # ---------------------------------
 def extract_text_from_pdf(uploaded_file):
     text = ""
-    with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+
+    pdf_bytes = uploaded_file.read()
+
+    # 1️⃣ Try extracting embedded text first
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         for page in doc:
             text += page.get_text()
+
+    text = text.strip()
+
+    # 2️⃣ If no embedded text → fallback to OCR
+    if not text:
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+            for page in doc:
+                pix = page.get_pixmap()
+                img = Image.frombytes(
+                    "RGB",
+                    [pix.width, pix.height],
+                    pix.samples
+                )
+                ocr_result = reader.readtext(np.array(img), detail=0)
+                text += " ".join(ocr_result)
+
     return text.strip()
 
 # ---------------------------------
