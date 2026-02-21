@@ -1,9 +1,10 @@
 streamlit
-torch>=2.6
+torch
 torchvision
 transformers
 easyocr
 sentencepiece
-numpy<2
+numpy
 pymupdf
-Pillow
+pdf2image
+pillow
